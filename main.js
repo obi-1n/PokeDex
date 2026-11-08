@@ -32,7 +32,11 @@ const generateHTML = (data) => {
   const NAME =
     data.name.charAt(0).toUpperCase() + data.name.slice(1).toLowerCase();
   const name = data.name;
-  const image = data.sprites.front_default;
+  const imageSources = [
+    data.sprites.other?.["official-artwork"]?.front_default,
+    data.sprites.front_default,
+    "Assets/Poke_Ball.png",
+  ].filter((source, index, sources) => source && sources.indexOf(source) === index);
   const primaryType = data.types[0]?.type.name || "";
   const secondaryType = data.types[1]?.type.name || "";
 
@@ -42,7 +46,7 @@ const generateHTML = (data) => {
   const html = `
     <a href="https://www.pokemon.com/us/pokedex/${name}" target="_blank" style="text-decoration: none; color: inherit;">
       <div class="pokemon" style="border: 8px solid ${typeColor1};">
-        <img class="image" src="${image}" alt="${data.name}">
+        <img class="image" src="${imageSources[0]}" alt="${data.name}" loading="lazy">
         <div class="container">
           <h3>${NAME}</h3>
           <p style="background-color: ${typeColor1};">${primaryType}</p>
@@ -59,6 +63,14 @@ const generateHTML = (data) => {
   const pokemonDiv = document.querySelector(".pokedex");
   if (pokemonDiv) {
     pokemonDiv.insertAdjacentHTML("beforeend", html);
+    const imageElement = pokemonDiv.lastElementChild?.querySelector(".image");
+    let sourceIndex = 0;
+    imageElement?.addEventListener("error", () => {
+      sourceIndex += 1;
+      if (sourceIndex < imageSources.length) {
+        imageElement.src = imageSources[sourceIndex];
+      }
+    });
   }
 };
 
