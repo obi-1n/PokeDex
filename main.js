@@ -3,7 +3,7 @@ const apiData = {
   url: "https://pokeapi.co/api/v2/pokemon/",
   id: 1,
 };
-const { url, id } = apiData;
+const { url } = apiData;
 
 const typeColors = {
   bug: "#A6B91A",
@@ -27,9 +27,45 @@ const typeColors = {
   water: "#6390F0",
 };
 
+const pageSize = 50;
+const typeFilterOptions = document.querySelector("#type-filter-options");
+const typeFilterSummary = document.querySelector("#type-filter-summary");
+const resultsStatus = document.querySelector("#results-status");
+const pokemonDiv = document.querySelector(".pokedex");
+const searchForm = document.querySelector("#search-form");
+const searchInput = document.querySelector("#pokemon-search");
+const typeFilterCache = new Map();
+let pokemonList = [];
+let currentPage = 1;
+let renderVersion = 0;
+
+Object.keys(typeColors).forEach((type) => {
+  const label = document.createElement("label");
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.value = type;
+  checkbox.addEventListener("change", () => {
+    currentPage = 1;
+    renderPokemon();
+  });
+  label.append(checkbox, ` ${type.charAt(0).toUpperCase()}${type.slice(1)}`);
+  typeFilterOptions?.appendChild(label);
+});
+
+document.querySelector("#clear-type-filters")?.addEventListener("click", () => {
+  typeFilterOptions?.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.checked = false;
+  });
+  currentPage = 1;
+  renderPokemon();
+});
+
 // --- Helper Functions ---
-const generateHTML = (data) => {
-  const NAME =
+
+const generateHTML = (data, version = renderVersion) => {
+  if (version !== renderVersion) return;
+
+  const displayName =
     data.name.charAt(0).toUpperCase() + data.name.slice(1).toLowerCase();
   const name = data.name;
   const imageSources = [
@@ -44,19 +80,23 @@ const generateHTML = (data) => {
   const typeColor2 = typeColors[secondaryType] || "none";
 
   const html = `
-    <a href="https://www.pokemon.com/us/pokedex/${name}" target="_blank" style="text-decoration: none; color: inherit;">
-      <div class="pokemon" style="border: 8px solid ${typeColor1};">
-        <img class="image" src="${imageSources[0]}" alt="${data.name}" loading="lazy">
-        <div class="container">
-          <h3>${NAME}</h3>
-          <p style="background-color: ${typeColor1};">${primaryType}</p>
-          ${
-            secondaryType
-              ? `<p style="background-color: ${typeColor2};">${secondaryType}</p>`
-              : ""
-          }
+    <a class="pokemon-link" href="https://www.pokemon.com/us/pokedex/${name}" target="_blank" rel="noopener noreferrer">
+      <article class="pokemon">
+        <div class="pokemon-artwork" style="--type-color: ${typeColor1};">
+          <img class="image" src="${imageSources[0]}" alt="${displayName}" loading="lazy">
         </div>
-      </div>
+        <div class="pokemon-info">
+          <h3>${displayName}</h3>
+          <div class="pokemon-types">
+            <span class="type-badge" style="--type-color: ${typeColor1};">${primaryType}</span>
+            ${
+              secondaryType
+                ? `<span class="type-badge" style="--type-color: ${typeColor2};">${secondaryType}</span>`
+                : ""
+            }
+          </div>
+        </div>
+      </article>
     </a>
   `;
 
@@ -74,61 +114,130 @@ const generateHTML = (data) => {
   }
 };
 
-// --- Initial Pokémon Load ---
-for (let currentId = id; currentId <= 8; currentId++) {
-  const apiURL = `${url}/${currentId}`;
-  fetch(apiURL)
-    .then((data) => data.json())
-    .then((pokemon) => generateHTML(pokemon));
-}
+const getSelectedTypes = () =>
+  Array.from(
+    typeFilterOptions?.querySelectorAll('input[type="checkbox"]:checked') || [],
+    (checkbox) => checkbox.value,
+  );
 
-// --- Load More Button ---
-let currentMaxId = 8;
-const loadMoreBtn = document.createElement("button");
-loadMoreBtn.id = "load-more-pokemon-btn";
-loadMoreBtn.textContent = "Load More Pokémon";
-loadMoreBtn.style.display = "block";
-loadMoreBtn.style.margin = "24px auto";
-loadMoreBtn.style.padding = "12px 24px";
-loadMoreBtn.style.fontSize = "1.2em";
-document.body.appendChild(loadMoreBtn);
-
-loadMoreBtn.addEventListener("click", () => {
-  const nextMaxId = currentMaxId + 8;
-  for (let currentId = currentMaxId + 1; currentId <= nextMaxId; currentId++) {
-    const apiURL = `${url}/${currentId}`;
-    fetch(apiURL)
-      .then((data) => data.json())
-      .then((pokemon) => generateHTML(pokemon));
-  }
-  currentMaxId = nextMaxId;
-});
-
-// --- Search Input ---
-const searchInput = document.createElement("input");
-searchInput.type = "text";
-searchInput.id = "pokemon-search";
-searchInput.placeholder = "Search by name or ID";
-
-const h1 = document.querySelector("h1");
-if (h1 && h1.parentNode) {
-  h1.parentNode.insertBefore(searchInput, h1.nextSibling);
-}
-
-searchInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    const query = searchInput.value.trim().toLowerCase();
-    if (!query) return;
-    const pokemonDiv = document.querySelector(".pokedex");
-    if (pokemonDiv) pokemonDiv.innerHTML = "";
-    fetch(`${url}/${query}`)
-      .then((data) => {
-        if (!data.ok) throw new Error("Not found");
-        return data.json();
+const getPokemonNamesForType = async (type) => {
+  if (!typeFilterCache.has(type)) {
+    const request = fetch(`https://pokeapi.co/api/v2/type/${type}`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load the ${type} type.`);
+        return response.json();
       })
-      .then((pokemon) => generateHTML(pokemon))
-      .catch(() => {
-        if (pokemonDiv) pokemonDiv.innerHTML = "<p>Pokémon not found.</p>";
+      .then((data) => new Set(data.pokemon.map(({ pokemon }) => pokemon.name)))
+      .catch((error) => {
+        typeFilterCache.delete(type);
+        throw error;
       });
+    typeFilterCache.set(type, request);
   }
+  return typeFilterCache.get(type);
+};
+
+const renderPagination = (pageCount) => {
+  document.querySelectorAll(".pagination").forEach((pagination) => {
+    pagination.replaceChildren();
+    if (pageCount <= 1) return;
+
+    for (let page = 1; page <= pageCount; page += 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = page;
+      button.setAttribute("aria-label", `Page ${page}`);
+      if (page === currentPage) {
+        button.setAttribute("aria-current", "page");
+      }
+      button.addEventListener("click", () => {
+        currentPage = page;
+        renderPokemon();
+        document.querySelector(".collection-heading")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+      pagination.appendChild(button);
+    }
+  });
+};
+
+const renderPokemon = async () => {
+  const requestVersion = ++renderVersion;
+  const selectedTypes = getSelectedTypes();
+  const query = searchInput?.value.trim().toLowerCase() || "";
+  if (typeFilterSummary) {
+    typeFilterSummary.textContent = selectedTypes.length
+      ? `Types (${selectedTypes.length} selected)`
+      : "Filter by type";
+  }
+  if (resultsStatus) resultsStatus.textContent = "Loading Pokémon…";
+  if (pokemonDiv) pokemonDiv.replaceChildren();
+
+  try {
+    const typeNameSets = await Promise.all(selectedTypes.map(getPokemonNamesForType));
+    if (requestVersion !== renderVersion) return;
+
+    const filteredPokemon = pokemonList.filter(({ name, url: pokemonUrl }) => {
+      const pokemonId = Number(pokemonUrl.split("/").filter(Boolean).pop());
+      const matchesQuery =
+        !query || name.includes(query) || String(pokemonId) === query;
+      const matchesTypes = typeNameSets.every((names) => names.has(name));
+      return matchesQuery && matchesTypes;
+    });
+
+    const pageCount = Math.ceil(filteredPokemon.length / pageSize);
+    if (pageCount === 0) currentPage = 1;
+    else currentPage = Math.min(currentPage, pageCount);
+
+    renderPagination(pageCount);
+    const startIndex = (currentPage - 1) * pageSize;
+    const pagePokemon = filteredPokemon.slice(startIndex, startIndex + pageSize);
+
+    if (resultsStatus) {
+      resultsStatus.textContent = filteredPokemon.length
+        ? `Showing ${startIndex + 1}–${startIndex + pagePokemon.length} of ${filteredPokemon.length} Pokémon`
+        : "No Pokémon match your search and selected types.";
+    }
+
+    const details = await Promise.all(
+      pagePokemon.map(async ({ url: pokemonUrl }) => {
+        const response = await fetch(pokemonUrl);
+        if (!response.ok) throw new Error("Could not load Pokémon details.");
+        return response.json();
+      }),
+    );
+    if (requestVersion !== renderVersion) return;
+    details.forEach((pokemon) => generateHTML(pokemon, requestVersion));
+  } catch (error) {
+    if (requestVersion !== renderVersion) return;
+    if (resultsStatus) {
+      resultsStatus.textContent = "Unable to load Pokémon. Please try again.";
+    }
+    console.error(error);
+  }
+};
+
+const loadPokemonList = async () => {
+  try {
+    const response = await fetch(`${url}?limit=10000`);
+    if (!response.ok) throw new Error("Could not load the Pokédex.");
+    const data = await response.json();
+    pokemonList = data.results;
+    renderPokemon();
+  } catch (error) {
+    if (resultsStatus) {
+      resultsStatus.textContent = "Unable to load the Pokédex. Please try again.";
+    }
+    console.error(error);
+  }
+};
+
+searchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  currentPage = 1;
+  renderPokemon();
 });
+
+loadPokemonList();

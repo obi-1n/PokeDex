@@ -13,9 +13,62 @@
     <title>Pokedex</title>
   </head>
   <body>
-    <h1>Pokedex</h1>
-    <div class="pokedex"></div>
-    <!-- Container for pokedex content -->
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Pokédex home">
+        <img src="Assets/Poke_Ball.png" alt="" />
+        <span>Pokédex</span>
+      </a>
+      <span class="header-label">THE WORLD OF POKÉMON</span>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p class="eyebrow">YOUR ADVENTURE STARTS HERE</p>
+        <h1 id="page-title">Discover your next<br />favorite Pokémon.</h1>
+        <p class="hero-copy">
+          Explore the Pokédex and find a Pokémon for every kind of adventure.
+        </p>
+        <form class="search-form" id="search-form">
+          <label class="visually-hidden" for="pokemon-search">
+            Search Pokémon by name or number
+          </label>
+          <input
+            type="search"
+            id="pokemon-search"
+            placeholder="Search by name or Pokédex number"
+            autocomplete="off"
+          />
+          <button type="submit" aria-label="Search Pokémon">Search</button>
+        </form>
+      </section>
+
+      <section class="collection" aria-labelledby="collection-title">
+        <div class="collection-heading">
+          <div>
+            <p class="eyebrow">THE COLLECTION</p>
+            <h2 id="collection-title">Pokémon to discover</h2>
+          </div>
+          <details class="type-filter">
+            <summary id="type-filter-summary">Filter by type</summary>
+            <div class="type-filter-menu">
+              <fieldset id="type-filter-options">
+                <legend class="visually-hidden">Choose Pokémon types</legend>
+              </fieldset>
+              <p class="type-filter-hint">
+                Pokémon must have every selected type.
+              </p>
+              <button id="clear-type-filters" type="button">Clear filters</button>
+            </div>
+          </details>
+        </div>
+        <p class="results-status" id="results-status" role="status" aria-live="polite">
+          Loading the Pokédex…
+        </p>
+        <nav class="pagination" aria-label="Pokémon pages"></nav>
+        <div class="pokedex" aria-live="polite"></div>
+        <nav class="pagination" aria-label="Pokémon pages"></nav>
+      </section>
+    </main>
     <script src="main.js"></script>
   </body>
 </html>
